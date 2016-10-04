@@ -374,7 +374,23 @@ function copyFolder(src,dst,name) {
     });
 }
 
-function moveFolder(src,dst,name) {
+var originalRequests = {};
+function moveFolder(src,dst,name){
+		
+	//console.log('Original Src: ' + src.path + '. Original Dst: ' + dst.path);
+	var origRequestObject = {};
+	origRequestObject.src = src;
+	origRequestObject.dst = dst;
+	origRequestObject.srcpathwithoutnew = src.path;
+	origRequestObject.srcpath = src.path + '\\' + name;
+	origRequestObject.dstpath = dst.path + '\\' + name;
+	var srcId = src.path;
+	originalRequests[srcId] = origRequestObject;	
+	
+	return moveFolderRecursive(src,dst,srcId,name);	
+}
+
+function moveFolderRecursive(src,dst,srcId,name) {
     name = name?name:src.name;
     return new WinJS.Promise(function (complete,failed) {
         WinJS.Promise.join({
@@ -393,8 +409,32 @@ function moveFolder(src,dst,name) {
                         src.deleteAsync().done(complete,failed);
                         return;
                     }
-                    moveFolder(the.folders[todo],dst)
-                    .done(movefolders,failed); 
+					
+					//get the path from root
+					var origRequestObject = originalRequests[srcId];
+					
+					var originalSrc = origRequestObject.srcpath;
+					var originalSrcWithoutNew = origRequestObject.srcpathwithoutnew;
+					var originalDst = origRequestObject.dstpath;
+					
+					// we need to remove the last part of originalSrc here
+					
+					var relativePath = the.folders[todo].path.replace(originalSrcWithoutNew,'');
+					var fullPath = originalDst + relativePath;
+					//we're going to create the new file in the recursive call so remove it here
+					var lastIndex = fullPath.lastIndexOf('\\');
+					fullPath = fullPath.substring(0,lastIndex);
+					//Original dest is: C:\Users\chris.redhead\AppData\Local\Packages\com.mydaycloud.app_h35559jr9hy9m\LocalState\apps\collabco.EventManager
+					//console.log('origSrc: ' + originalSrc + '. origDst: ' + originalDst);
+					//console.log('Src path is ' + src.path + '. Relative path is: ' + relativePath + '. Full path is: ' + fullPath + '. Original dest is: ' + originalDst);
+					
+					getFolderFromPathAsync(fullPath)
+						.done(
+							function(parentResult){
+								//console.log('Parent path is: ' + parentResult.path);
+								moveFolderRecursive(the.folders[todo],parentResult,srcId)
+								.done(movefolders,failed); 
+							});
                 };
                 var movefiles = function() {
                     if (!(todo--)) {
